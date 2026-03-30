@@ -28,15 +28,16 @@ type Driver struct {
 	*drivers.BaseDriver
 	client *linodego.Client
 
-	APIToken         string
-	UserAgentPrefix  string
-	IPAddress        string
-	PrivateIPAddress string
-	CreatePrivateIP  bool
-	UseInterfaces    bool
-	VPCSubnetID      int
-	VPCPrivateIP     string
-	DockerPort       int
+	APIToken                  string
+	UserAgentPrefix           string
+	IPAddress                 string
+	PrivateIPAddress          string
+	CreatePrivateIP           bool
+	UseInterfaces             bool
+	VPCSubnetID               int
+	VPCPrivateIP              string
+	PublicInterfaceFirewallID int
+	DockerPort                int
 
 	InstanceID    int
 	InstanceLabel string
@@ -123,6 +124,17 @@ func createRandomRootPassword() (string, error) {
 	}
 	rootPass := base64.StdEncoding.EncodeToString(rawRootPass)
 	return rootPass, nil
+}
+
+func firewallIDPtr(id int) **int {
+	if id == 0 {
+		return nil
+	}
+
+	value := id
+	valuePtr := &value
+
+	return &valuePtr
 }
 
 // DriverName returns the name of the driver
@@ -244,6 +256,11 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 			Name:   "linode-vpc-private-ip",
 			Usage:  "Optional IPv4 address to request on the VPC interface (requires --linode-use-interfaces)",
 		},
+		mcnflag.IntFlag{
+			EnvVar: "LINODE_PUBLIC_INTERFACE_FIREWALL_ID",
+			Name:   "linode-public-interface-firewall-id",
+			Usage:  "Firewall ID to attach to the public interface when using interface/VPC networking",
+		},
 		mcnflag.StringFlag{
 			EnvVar: "LINODE_UA_PREFIX",
 			Name:   "linode-ua-prefix",
@@ -297,6 +314,7 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	d.UseInterfaces = flags.Bool("linode-use-interfaces")
 	d.VPCSubnetID = flags.Int("linode-vpc-subnet-id")
 	d.VPCPrivateIP = strings.TrimSpace(flags.String("linode-vpc-private-ip"))
+	d.PublicInterfaceFirewallID = flags.Int("linode-public-interface-firewall-id")
 	d.UserAgentPrefix = flags.String("linode-ua-prefix")
 	d.Tags = flags.String("linode-tags")
 
@@ -341,6 +359,10 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 
 	d.InstanceLabel = newLabel
 
+	if d.PublicInterfaceFirewallID < 0 {
+		return fmt.Errorf("linode public interface firewall id must be zero or positive")
+	}
+
 	if d.UseInterfaces && d.CreatePrivateIP {
 		return fmt.Errorf("cannot combine --linode-use-interfaces with --linode-create-private-ip; choose one networking mode")
 	}
@@ -357,8 +379,8 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 			}
 		}
 	} else {
-		if d.VPCSubnetID != 0 || d.VPCPrivateIP != "" {
-			return fmt.Errorf("VPC interface options require --linode-use-interfaces to be set")
+		if d.VPCSubnetID != 0 || d.VPCPrivateIP != "" || d.PublicInterfaceFirewallID != 0 {
+			return fmt.Errorf("VPC/interface options require --linode-use-interfaces to be set")
 		}
 	}
 
@@ -495,13 +517,12 @@ func (d *Driver) Create() error {
 
 		createOpts.InterfaceGeneration = linodego.GenerationLinode
 		createOpts.PrivateIP = false
-		createOpts.LinodeInterfaces = []linodego.LinodeInterfaceCreateOptions{
-			{
-				DefaultRoute: &linodego.InterfaceDefaultRoute{IPv4: &defaultRoute},
-				Public:       &linodego.PublicInterfaceCreateOptions{},
-			},
-			vpcInterface,
+		publicInterface := linodego.LinodeInterfaceCreateOptions{
+			DefaultRoute: &linodego.InterfaceDefaultRoute{IPv4: &defaultRoute},
+			Public:       &linodego.PublicInterfaceCreateOptions{},
+			FirewallID:   firewallIDPtr(d.PublicInterfaceFirewallID),
 		}
+		createOpts.LinodeInterfaces = []linodego.LinodeInterfaceCreateOptions{publicInterface, vpcInterface}
 	}
 
 	linode, err := client.CreateInstance(context.TODO(), createOpts)
