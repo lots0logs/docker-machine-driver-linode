@@ -739,9 +739,6 @@ func firstVPCIPv4(addresses []*linodego.VPCIP) string {
 		if address.Address != nil && *address.Address != "" {
 			return *address.Address
 		}
-		if address.AddressRange != nil && *address.AddressRange != "" {
-			return *address.AddressRange
-		}
 	}
 
 	return ""

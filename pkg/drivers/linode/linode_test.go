@@ -7,6 +7,7 @@ import (
 
 	"github.com/docker/machine/libmachine/drivers"
 	"github.com/google/go-cmp/cmp"
+	"github.com/linode/linodego"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -122,4 +123,16 @@ func TestNormalizeInstanceLabel(t *testing.T) {
 	if !reflect.DeepEqual(result, expectedResult) {
 		t.Fatal(cmp.Diff(result, expectedResult))
 	}
+}
+
+func TestFirstVPCIPv4SkipsRanges(t *testing.T) {
+	ip := "10.0.0.5"
+	ipRange := "10.0.0.0/24"
+
+	got := firstVPCIPv4([]*linodego.VPCIP{
+		{AddressRange: &ipRange},
+		{Address: &ip},
+	})
+
+	assert.Equal(t, ip, got)
 }
