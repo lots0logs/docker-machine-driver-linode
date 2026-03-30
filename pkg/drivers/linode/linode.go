@@ -36,6 +36,7 @@ type Driver struct {
 	UseInterfaces             bool
 	VPCSubnetID               int
 	VPCPrivateIP              string
+	VPCInterfaceFirewallID    int
 	PublicInterfaceFirewallID int
 	DockerPort                int
 
@@ -263,6 +264,11 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 			Name:   "linode-public-interface-firewall-id",
 			Usage:  "Firewall ID to attach to the public interface when using interface/VPC networking",
 		},
+		mcnflag.IntFlag{
+			EnvVar: "LINODE_VPC_INTERFACE_FIREWALL_ID",
+			Name:   "linode-vpc-interface-firewall-id",
+			Usage:  "Firewall ID to attach to the VPC interface when using interface/VPC networking",
+		},
 		mcnflag.StringFlag{
 			EnvVar: "LINODE_UA_PREFIX",
 			Name:   "linode-ua-prefix",
@@ -316,6 +322,7 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	d.UseInterfaces = flags.Bool("linode-use-interfaces")
 	d.VPCSubnetID = flags.Int("linode-vpc-subnet-id")
 	d.VPCPrivateIP = strings.TrimSpace(flags.String("linode-vpc-private-ip"))
+	d.VPCInterfaceFirewallID = flags.Int("linode-vpc-interface-firewall-id")
 	d.PublicInterfaceFirewallID = flags.Int("linode-public-interface-firewall-id")
 	d.UserAgentPrefix = flags.String("linode-ua-prefix")
 	d.Tags = flags.String("linode-tags")
@@ -364,6 +371,9 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	if d.PublicInterfaceFirewallID < 0 {
 		return fmt.Errorf("invalid value for --linode-public-interface-firewall-id: must be zero or positive")
 	}
+	if d.VPCInterfaceFirewallID < 0 {
+		return fmt.Errorf("invalid value for --linode-vpc-interface-firewall-id: must be zero or positive")
+	}
 
 	if d.UseInterfaces && d.CreatePrivateIP {
 		return fmt.Errorf("cannot combine --linode-use-interfaces with --linode-create-private-ip; choose one networking mode")
@@ -381,7 +391,7 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 			}
 		}
 	} else {
-		if d.VPCSubnetID != 0 || d.VPCPrivateIP != "" || d.PublicInterfaceFirewallID != 0 {
+		if d.VPCSubnetID != 0 || d.VPCPrivateIP != "" || d.PublicInterfaceFirewallID != 0 || d.VPCInterfaceFirewallID != 0 {
 			return fmt.Errorf("VPC/interface options require --linode-use-interfaces to be set")
 		}
 	}
@@ -503,6 +513,7 @@ func (d *Driver) Create() error {
 				SubnetID: d.VPCSubnetID,
 			},
 		}
+		vpcInterface.FirewallID = firewallIDPtr(d.VPCInterfaceFirewallID)
 
 		if d.VPCPrivateIP != "" {
 			address := d.VPCPrivateIP
