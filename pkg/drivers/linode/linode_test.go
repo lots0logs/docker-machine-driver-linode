@@ -100,7 +100,7 @@ func TestSetConfigFromFlagsInterfaceFirewallRequiresInterfaces(t *testing.T) {
 	assert.Contains(t, err.Error(), "linode-use-interfaces")
 }
 
-func TestSetConfigFromFlagsInterfaceFirewallMustBePositive(t *testing.T) {
+func TestSetConfigFromFlagsInterfaceFirewallMustBeNonNegative(t *testing.T) {
 	driver := NewDriver("", "")
 
 	checkFlags := &drivers.CheckDriverOptions{
@@ -115,7 +115,7 @@ func TestSetConfigFromFlagsInterfaceFirewallMustBePositive(t *testing.T) {
 
 	err := driver.SetConfigFromFlags(checkFlags)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "firewall id")
+	assert.Contains(t, err.Error(), "--linode-public-interface-firewall-id")
 }
 
 func TestPrivateIP(t *testing.T) {

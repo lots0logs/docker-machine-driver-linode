@@ -126,6 +126,8 @@ func createRandomRootPassword() (string, error) {
 	return rootPass, nil
 }
 
+// FirewallID is a **int in linodego so callers can distinguish between
+// omitting the field entirely and explicitly sending a value.
 func firewallIDPtr(id int) **int {
 	if id == 0 {
 		return nil
