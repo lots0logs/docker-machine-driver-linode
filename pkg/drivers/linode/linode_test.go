@@ -7,6 +7,7 @@ import (
 
 	"github.com/docker/machine/libmachine/drivers"
 	"github.com/google/go-cmp/cmp"
+	"github.com/linode/linodego"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -25,6 +26,60 @@ func TestSetConfigFromFlags(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Empty(t, checkFlags.InvalidFlags)
+}
+
+func TestSetConfigFromFlagsInterfaceRequiresVPC(t *testing.T) {
+	driver := NewDriver("", "")
+
+	checkFlags := &drivers.CheckDriverOptions{
+		FlagsValues: map[string]interface{}{
+			"linode-token":          "PROJECT",
+			"linode-use-interfaces": true,
+		},
+		CreateFlags: driver.GetCreateFlags(),
+	}
+
+	err := driver.SetConfigFromFlags(checkFlags)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "requires --linode-vpc-subnet-id")
+}
+
+func TestSetConfigFromFlagsInterfaceConflictsWithLegacyPrivateIP(t *testing.T) {
+	driver := NewDriver("", "")
+
+	checkFlags := &drivers.CheckDriverOptions{
+		FlagsValues: map[string]interface{}{
+			"linode-token":             "PROJECT",
+			"linode-use-interfaces":    true,
+			"linode-vpc-subnet-id":     456,
+			"linode-create-private-ip": true,
+		},
+		CreateFlags: driver.GetCreateFlags(),
+	}
+
+	err := driver.SetConfigFromFlags(checkFlags)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "linode-use-interfaces")
+}
+
+func TestSetConfigFromFlagsInterfaceHappyPath(t *testing.T) {
+	driver := NewDriver("", "")
+
+	checkFlags := &drivers.CheckDriverOptions{
+		FlagsValues: map[string]interface{}{
+			"linode-token":          "PROJECT",
+			"linode-use-interfaces": true,
+			"linode-vpc-subnet-id":  456,
+			"linode-vpc-private-ip": "10.0.0.10",
+		},
+		CreateFlags: driver.GetCreateFlags(),
+	}
+
+	err := driver.SetConfigFromFlags(checkFlags)
+	assert.NoError(t, err)
+	assert.True(t, driver.UseInterfaces)
+	assert.Equal(t, 456, driver.VPCSubnetID)
+	assert.Equal(t, "10.0.0.10", driver.VPCPrivateIP)
 }
 
 func TestPrivateIP(t *testing.T) {
@@ -68,4 +123,16 @@ func TestNormalizeInstanceLabel(t *testing.T) {
 	if !reflect.DeepEqual(result, expectedResult) {
 		t.Fatal(cmp.Diff(result, expectedResult))
 	}
+}
+
+func TestFirstVPCIPv4SkipsRanges(t *testing.T) {
+	ip := "10.0.0.5"
+	ipRange := "10.0.0.0/24"
+
+	got := firstVPCIPv4([]*linodego.VPCIP{
+		{AddressRange: &ipRange},
+		{Address: &ip},
+	})
+
+	assert.Equal(t, ip, got)
 }
