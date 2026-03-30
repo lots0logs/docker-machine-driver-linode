@@ -74,6 +74,11 @@ docker-machine create -d linode --linode-token=<linode-token> linode
 
 - Added opt-in Linode interface/VPC networking mode with VPC/subnet flags while keeping legacy `--linode-create-private-ip` behavior unchanged.
 
+## Networking Modes
+
+- **Legacy (default):** uses public networking and optionally `--linode-create-private-ip` to attach a private address.
+- **Interface/VPC (opt-in):** enable with `--linode-use-interfaces` plus `--linode-vpc-id` and `--linode-vpc-subnet-id`; incompatible with `--linode-create-private-ip`.
+
 ## Notes
 
 * When using the `linode/containerlinux` `linode-image`, the `linode-ssh-user` will default to `core`
