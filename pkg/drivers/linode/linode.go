@@ -429,6 +429,12 @@ func (d *Driver) PreCreateCheck() error {
 		d.StackScriptLabel = script.Label
 	}
 
+	if d.UseInterfaces {
+		if _, err := client.GetVPCSubnet(context.TODO(), d.VPCID, d.VPCSubnetID); err != nil {
+			return fmt.Errorf("failed to confirm subnet %d in VPC %d: %w", d.VPCSubnetID, d.VPCID, err)
+		}
+	}
+
 	return nil
 }
 
@@ -522,39 +528,49 @@ func (d *Driver) Create() error {
 	// Don't persist alias region names
 	d.Region = linode.Region
 
-	ips, err := client.GetInstanceIPAddresses(context.TODO(), linode.ID)
-	if err != nil {
-		return err
-	}
-
-	if ips == nil || ips.IPv4 == nil {
-		return errors.New("Linode IP information is not available")
-	}
-
-	d.IPAddress = firstInstanceIP(ips.IPv4.Public)
-	if d.IPAddress == "" {
-		d.IPAddress = firstInstanceIP(ips.IPv4.Shared)
-	}
-	if d.IPAddress == "" {
-		d.IPAddress = firstInstanceIP(ips.IPv4.Reserved)
-	}
-
 	if d.UseInterfaces {
+		ips, err := client.GetInstanceIPAddresses(context.TODO(), linode.ID)
+		if err != nil {
+			return err
+		}
+
+		if ips == nil || ips.IPv4 == nil {
+			return errors.New("Linode IP information is not available")
+		}
+
+		d.IPAddress = firstInstanceIP(ips.IPv4.Public)
+		if d.IPAddress == "" {
+			d.IPAddress = firstInstanceIP(ips.IPv4.Shared)
+		}
+		if d.IPAddress == "" {
+			d.IPAddress = firstInstanceIP(ips.IPv4.Reserved)
+		}
+
 		d.PrivateIPAddress = firstVPCIPv4(ips.IPv4.VPC)
-	} else if d.CreatePrivateIP {
-		d.PrivateIPAddress = firstInstanceIP(ips.IPv4.Private)
-	}
 
-	if d.IPAddress == "" {
-		return errors.New("Linode public IP address was not found")
-	}
+		if d.IPAddress == "" {
+			return errors.New("Linode public IP address was not found")
+		}
 
-	if d.UseInterfaces && d.PrivateIPAddress == "" {
-		return fmt.Errorf("Linode VPC private IP address not found for VPC %d subnet %d", d.VPCID, d.VPCSubnetID)
-	}
+		if d.PrivateIPAddress == "" {
+			return fmt.Errorf("Linode VPC private IP address not found for VPC %d subnet %d", d.VPCID, d.VPCSubnetID)
+		}
+	} else {
+		for _, address := range linode.IPv4 {
+			if private := privateIP(*address); !private {
+				d.IPAddress = address.String()
+			} else if d.CreatePrivateIP {
+				d.PrivateIPAddress = address.String()
+			}
+		}
 
-	if d.CreatePrivateIP && d.PrivateIPAddress == "" {
-		return errors.New("Linode Private IP Address is not found")
+		if d.IPAddress == "" {
+			return errors.New("Linode IP Address is not found")
+		}
+
+		if d.CreatePrivateIP && d.PrivateIPAddress == "" {
+			return errors.New("Linode Private IP Address is not found")
+		}
 	}
 
 	log.Debugf("Created Linode Instance %s (%d), IP address %q, Private IP address %q (interfaces enabled: %t)",

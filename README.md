@@ -64,7 +64,7 @@ docker-machine create -d linode --linode-token=<linode-token> linode
 | `linode-stackscript-data` | `LINODE_STACKSCRIPT_DATA` | None | A JSON string specifying data that is passed (via UDF) to the selected StackScript.
 | `linode-create-private-ip` | `LINODE_CREATE_PRIVATE_IP` | None | A flag specifying to create private IP for the Linode instance.
 | `linode-use-interfaces` | `LINODE_USE_INTERFACES` | None | Opt-in to Linode's interface/VPC networking stack (requires VPC flags; conflicts with `linode-create-private-ip`).
-| `linode-vpc-id` | `LINODE_VPC_ID` | None | VPC ID to attach when using interface networking.
+| `linode-vpc-id` | `LINODE_VPC_ID` | None | VPC ID used to validate the subnet selection when using interface networking.
 | `linode-vpc-subnet-id` | `LINODE_VPC_SUBNET_ID` | None | VPC subnet ID to attach when using interface networking.
 | `linode-vpc-private-ip` | `LINODE_VPC_PRIVATE_IP` | None | Optional IPv4 address to request on the VPC interface (requires `linode-use-interfaces`).
 | `linode-tags` | `LINODE_TAGS` | None | A comma separated list of tags to apply to the Linode resource
