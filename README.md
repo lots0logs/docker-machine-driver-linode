@@ -70,10 +70,6 @@ docker-machine create -d linode --linode-token=<linode-token> linode
 | `linode-tags` | `LINODE_TAGS` | None | A comma separated list of tags to apply to the Linode resource
 | `linode-ua-prefix` | `LINODE_UA_PREFIX` | None | Prefix the User-Agent in Linode API calls with some 'product/version'
 
-## Release Notes
-
-- Added opt-in Linode interface/VPC networking mode with VPC/subnet flags while keeping legacy `--linode-create-private-ip` behavior unchanged.
-
 ## Networking Modes
 
 - **Legacy (default):** uses public networking and optionally `--linode-create-private-ip` to attach a private address.
