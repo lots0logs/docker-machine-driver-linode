@@ -92,6 +92,24 @@ func TestSetConfigFromFlagsUserDataMissingFile(t *testing.T) {
 	assert.Contains(t, err.Error(), "--linode-user-data")
 }
 
+func TestSetConfigFromFlagsUserDataEmptyPath(t *testing.T) {
+	driver := NewDriver("", "")
+
+	checkFlags := &drivers.CheckDriverOptions{
+		FlagsValues: map[string]interface{}{
+			"linode-token":     "PROJECT",
+			"linode-root-pass": "ROOTPASS",
+			"linode-user-data": "@",
+		},
+		CreateFlags: driver.GetCreateFlags(),
+	}
+
+	err := driver.SetConfigFromFlags(checkFlags)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "--linode-user-data")
+}
+
 func TestPrivateIP(t *testing.T) {
 	ip := net.IP{}
 	for _, addr := range [][]byte{

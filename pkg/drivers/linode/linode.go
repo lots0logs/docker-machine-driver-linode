@@ -51,6 +51,7 @@ type Driver struct {
 	StackScriptLabel string
 	StackScriptData  map[string]string
 
+	// UserData contains base64-encoded cloud-init user data for the Linode Metadata service.
 	UserData string
 	Tags     string
 }
