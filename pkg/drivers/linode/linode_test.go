@@ -67,10 +67,11 @@ func TestSetConfigFromFlagsInterfaceHappyPath(t *testing.T) {
 
 	checkFlags := &drivers.CheckDriverOptions{
 		FlagsValues: map[string]interface{}{
-			"linode-token":          "PROJECT",
-			"linode-use-interfaces": true,
-			"linode-vpc-subnet-id":  456,
-			"linode-vpc-private-ip": "10.0.0.10",
+			"linode-token":                        "PROJECT",
+			"linode-use-interfaces":               true,
+			"linode-vpc-subnet-id":                456,
+			"linode-vpc-private-ip":               "10.0.0.10",
+			"linode-public-interface-firewall-id": 789,
 		},
 		CreateFlags: driver.GetCreateFlags(),
 	}
@@ -80,6 +81,41 @@ func TestSetConfigFromFlagsInterfaceHappyPath(t *testing.T) {
 	assert.True(t, driver.UseInterfaces)
 	assert.Equal(t, 456, driver.VPCSubnetID)
 	assert.Equal(t, "10.0.0.10", driver.VPCPrivateIP)
+	assert.Equal(t, 789, driver.PublicInterfaceFirewallID)
+}
+
+func TestSetConfigFromFlagsInterfaceFirewallRequiresInterfaces(t *testing.T) {
+	driver := NewDriver("", "")
+
+	checkFlags := &drivers.CheckDriverOptions{
+		FlagsValues: map[string]interface{}{
+			"linode-token":                        "PROJECT",
+			"linode-public-interface-firewall-id": 111,
+		},
+		CreateFlags: driver.GetCreateFlags(),
+	}
+
+	err := driver.SetConfigFromFlags(checkFlags)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "linode-use-interfaces")
+}
+
+func TestSetConfigFromFlagsInterfaceFirewallMustBeNonNegative(t *testing.T) {
+	driver := NewDriver("", "")
+
+	checkFlags := &drivers.CheckDriverOptions{
+		FlagsValues: map[string]interface{}{
+			"linode-token":                        "PROJECT",
+			"linode-use-interfaces":               true,
+			"linode-vpc-subnet-id":                456,
+			"linode-public-interface-firewall-id": -2,
+		},
+		CreateFlags: driver.GetCreateFlags(),
+	}
+
+	err := driver.SetConfigFromFlags(checkFlags)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "--linode-public-interface-firewall-id")
 }
 
 func TestPrivateIP(t *testing.T) {
