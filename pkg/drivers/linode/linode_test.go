@@ -40,7 +40,7 @@ func TestSetConfigFromFlagsInterfaceRequiresVPC(t *testing.T) {
 
 	err := driver.SetConfigFromFlags(checkFlags)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "requires either existing VPC IDs or")
+	assert.Contains(t, err.Error(), "requires --linode-vpc-subnet-id")
 }
 
 func TestSetConfigFromFlagsInterfaceConflictsWithLegacyPrivateIP(t *testing.T) {
@@ -50,7 +50,6 @@ func TestSetConfigFromFlagsInterfaceConflictsWithLegacyPrivateIP(t *testing.T) {
 		FlagsValues: map[string]interface{}{
 			"linode-token":             "PROJECT",
 			"linode-use-interfaces":    true,
-			"linode-vpc-id":            123,
 			"linode-vpc-subnet-id":     456,
 			"linode-create-private-ip": true,
 		},
@@ -69,7 +68,6 @@ func TestSetConfigFromFlagsInterfaceHappyPath(t *testing.T) {
 		FlagsValues: map[string]interface{}{
 			"linode-token":          "PROJECT",
 			"linode-use-interfaces": true,
-			"linode-vpc-id":         123,
 			"linode-vpc-subnet-id":  456,
 			"linode-vpc-private-ip": "10.0.0.10",
 		},
@@ -79,54 +77,8 @@ func TestSetConfigFromFlagsInterfaceHappyPath(t *testing.T) {
 	err := driver.SetConfigFromFlags(checkFlags)
 	assert.NoError(t, err)
 	assert.True(t, driver.UseInterfaces)
-	assert.Equal(t, 123, driver.VPCID)
 	assert.Equal(t, 456, driver.VPCSubnetID)
 	assert.Equal(t, "10.0.0.10", driver.VPCPrivateIP)
-}
-
-func TestSetConfigFromFlagsInterfaceCreateNewVPC(t *testing.T) {
-	driver := NewDriver("", "")
-
-	checkFlags := &drivers.CheckDriverOptions{
-		FlagsValues: map[string]interface{}{
-			"linode-token":             "PROJECT",
-			"linode-use-interfaces":    true,
-			"linode-vpc-label":         "new-vpc",
-			"linode-vpc-subnet-label":  "subnet-a",
-			"linode-vpc-subnet-ipv4":   "10.0.0.0/24",
-			"linode-vpc-private-ip":    "10.0.0.10",
-			"linode-create-private-ip": false,
-		},
-		CreateFlags: driver.GetCreateFlags(),
-	}
-
-	err := driver.SetConfigFromFlags(checkFlags)
-	assert.NoError(t, err)
-	assert.True(t, driver.UseInterfaces)
-	assert.Zero(t, driver.VPCID)
-	assert.Zero(t, driver.VPCSubnetID)
-	assert.Equal(t, "new-vpc", driver.VPCLabel)
-	assert.Equal(t, "subnet-a", driver.VPCSubnetLabel)
-	assert.Equal(t, "10.0.0.0/24", driver.VPCSubnetIPv4)
-	assert.Equal(t, "10.0.0.10", driver.VPCPrivateIP)
-}
-
-func TestSetConfigFromFlagsInterfaceMixedVPCInputs(t *testing.T) {
-	driver := NewDriver("", "")
-
-	checkFlags := &drivers.CheckDriverOptions{
-		FlagsValues: map[string]interface{}{
-			"linode-token":            "PROJECT",
-			"linode-use-interfaces":   true,
-			"linode-vpc-id":           123,
-			"linode-vpc-subnet-label": "subnet-a",
-		},
-		CreateFlags: driver.GetCreateFlags(),
-	}
-
-	err := driver.SetConfigFromFlags(checkFlags)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "requires both --linode-vpc-id and --linode-vpc-subnet-id")
 }
 
 func TestPrivateIP(t *testing.T) {

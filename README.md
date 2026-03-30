@@ -63,12 +63,8 @@ docker-machine create -d linode --linode-token=<linode-token> linode
 | `linode-stackscript` | `LINODE_STACKSCRIPT` | None | Specifies the Linode StackScript to use to create the instance, either by numeric ID, or using the form *username*/*label*.
 | `linode-stackscript-data` | `LINODE_STACKSCRIPT_DATA` | None | A JSON string specifying data that is passed (via UDF) to the selected StackScript.
 | `linode-create-private-ip` | `LINODE_CREATE_PRIVATE_IP` | None | A flag specifying to create private IP for the Linode instance.
-| `linode-use-interfaces` | `LINODE_USE_INTERFACES` | None | Opt-in to Linode's interface/VPC networking stack (requires existing VPC IDs or VPC creation flags; conflicts with `linode-create-private-ip`).
-| `linode-vpc-id` | `LINODE_VPC_ID` | None | Existing VPC ID to validate the subnet selection when using interface networking.
-| `linode-vpc-subnet-id` | `LINODE_VPC_SUBNET_ID` | None | Existing VPC subnet ID to attach when using interface networking.
-| `linode-vpc-label` | `LINODE_VPC_LABEL` | None | VPC label to create when no existing VPC is supplied (requires `linode-use-interfaces`).
-| `linode-vpc-subnet-label` | `LINODE_VPC_SUBNET_LABEL` | None | VPC subnet label to create when no existing subnet is supplied (requires `linode-use-interfaces`).
-| `linode-vpc-subnet-ipv4` | `LINODE_VPC_SUBNET_IPV4` | None | VPC subnet IPv4 range (CIDR) to create when no existing subnet is supplied (requires `linode-use-interfaces`).
+| `linode-use-interfaces` | `LINODE_USE_INTERFACES` | None | Opt-in to Linode's interface/VPC networking stack (requires `linode-vpc-subnet-id`; conflicts with `linode-create-private-ip`).
+| `linode-vpc-subnet-id` | `LINODE_VPC_SUBNET_ID` | None | VPC subnet ID to attach when using interface networking.
 | `linode-vpc-private-ip` | `LINODE_VPC_PRIVATE_IP` | None | Optional IPv4 address to request on the VPC interface (requires `linode-use-interfaces`).
 | `linode-tags` | `LINODE_TAGS` | None | A comma separated list of tags to apply to the Linode resource
 | `linode-ua-prefix` | `LINODE_UA_PREFIX` | None | Prefix the User-Agent in Linode API calls with some 'product/version'
@@ -76,7 +72,7 @@ docker-machine create -d linode --linode-token=<linode-token> linode
 ## Networking Modes
 
 - **Legacy (default):** uses public networking and optionally `--linode-create-private-ip` to attach a private address.
-- **Interface/VPC (opt-in):** enable with `--linode-use-interfaces` plus either existing IDs (`--linode-vpc-id` and `--linode-vpc-subnet-id`) or creation flags (`--linode-vpc-label`, `--linode-vpc-subnet-label`, and `--linode-vpc-subnet-ipv4`). This mode is incompatible with `--linode-create-private-ip`.
+- **Interface/VPC (opt-in):** enable with `--linode-use-interfaces` plus `--linode-vpc-subnet-id`. This mode is incompatible with `--linode-create-private-ip`.
 
 ## Notes
 
@@ -147,18 +143,9 @@ docker-machine create \
   -d linode \
   --linode-token=$LINODE_TOKEN \
   --linode-use-interfaces \
-  --linode-vpc-id=12345 \
   --linode-vpc-subnet-id=67890 \
   --linode-vpc-private-ip=10.0.0.25 \
   linode-vpc
-```
-
-To create a new VPC and subnet on the fly instead, omit `--linode-vpc-id` and `--linode-vpc-subnet-id` and provide:
-
-```bash
-  --linode-vpc-label=my-vpc \
-  --linode-vpc-subnet-label=backend \
-  --linode-vpc-subnet-ipv4=10.10.0.0/24
 ```
 
 The `--linode-use-interfaces` flag is incompatible with `--linode-create-private-ip` to keep networking behavior deterministic. Omit `--linode-vpc-private-ip` to request an automatically assigned address from the subnet. Without `--linode-use-interfaces`, legacy networking remains the default.

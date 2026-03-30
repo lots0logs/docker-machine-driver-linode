@@ -34,11 +34,7 @@ type Driver struct {
 	PrivateIPAddress string
 	CreatePrivateIP  bool
 	UseInterfaces    bool
-	VPCID            int
 	VPCSubnetID      int
-	VPCLabel         string
-	VPCSubnetLabel   string
-	VPCSubnetIPv4    string
 	VPCPrivateIP     string
 	DockerPort       int
 
@@ -239,29 +235,9 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 			Usage:  "Enable Linode interface/VPC networking (opt-in, keeps legacy defaults otherwise)",
 		},
 		mcnflag.IntFlag{
-			EnvVar: "LINODE_VPC_ID",
-			Name:   "linode-vpc-id",
-			Usage:  "VPC ID to attach when using interface/VPC networking",
-		},
-		mcnflag.IntFlag{
 			EnvVar: "LINODE_VPC_SUBNET_ID",
 			Name:   "linode-vpc-subnet-id",
 			Usage:  "VPC subnet ID to attach when using interface/VPC networking",
-		},
-		mcnflag.StringFlag{
-			EnvVar: "LINODE_VPC_LABEL",
-			Name:   "linode-vpc-label",
-			Usage:  "VPC label to create when using interface/VPC networking without an existing VPC (requires --linode-use-interfaces)",
-		},
-		mcnflag.StringFlag{
-			EnvVar: "LINODE_VPC_SUBNET_LABEL",
-			Name:   "linode-vpc-subnet-label",
-			Usage:  "VPC subnet label to create when using interface/VPC networking without an existing VPC (requires --linode-use-interfaces)",
-		},
-		mcnflag.StringFlag{
-			EnvVar: "LINODE_VPC_SUBNET_IPV4",
-			Name:   "linode-vpc-subnet-ipv4",
-			Usage:  "VPC subnet IPv4 range (CIDR) to create when using interface/VPC networking without an existing VPC (requires --linode-use-interfaces)",
 		},
 		mcnflag.StringFlag{
 			EnvVar: "LINODE_VPC_PRIVATE_IP",
@@ -319,11 +295,7 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	d.DockerPort = flags.Int("linode-docker-port")
 	d.CreatePrivateIP = flags.Bool("linode-create-private-ip")
 	d.UseInterfaces = flags.Bool("linode-use-interfaces")
-	d.VPCID = flags.Int("linode-vpc-id")
 	d.VPCSubnetID = flags.Int("linode-vpc-subnet-id")
-	d.VPCLabel = strings.TrimSpace(flags.String("linode-vpc-label"))
-	d.VPCSubnetLabel = strings.TrimSpace(flags.String("linode-vpc-subnet-label"))
-	d.VPCSubnetIPv4 = strings.TrimSpace(flags.String("linode-vpc-subnet-ipv4"))
 	d.VPCPrivateIP = strings.TrimSpace(flags.String("linode-vpc-private-ip"))
 	d.UserAgentPrefix = flags.String("linode-ua-prefix")
 	d.Tags = flags.String("linode-tags")
@@ -374,33 +346,8 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	}
 
 	if d.UseInterfaces {
-		usingExisting := d.VPCID != 0 || d.VPCSubnetID != 0
-		creatingVPC := d.VPCID == 0 && d.VPCSubnetID == 0 && (d.VPCLabel != "" || d.VPCSubnetLabel != "" || d.VPCSubnetIPv4 != "")
-
-		if (d.VPCID == 0) != (d.VPCSubnetID == 0) {
-			return fmt.Errorf("linode interface networking requires both --linode-vpc-id and --linode-vpc-subnet-id when attaching to an existing VPC")
-		}
-
-		if usingExisting && creatingVPC {
-			return fmt.Errorf("provide either existing VPC IDs or VPC creation flags, not both")
-		}
-
-		if usingExisting {
-			if d.VPCLabel != "" || d.VPCSubnetLabel != "" || d.VPCSubnetIPv4 != "" {
-				return fmt.Errorf("VPC creation flags cannot be combined with existing VPC ID/subnet ID")
-			}
-		} else {
-			if !creatingVPC {
-				return fmt.Errorf("linode interface networking requires either existing VPC IDs or --linode-vpc-label, --linode-vpc-subnet-label, and --linode-vpc-subnet-ipv4")
-			}
-
-			if d.VPCLabel == "" || d.VPCSubnetLabel == "" || d.VPCSubnetIPv4 == "" {
-				return fmt.Errorf("linode interface networking requires --linode-vpc-label, --linode-vpc-subnet-label, and --linode-vpc-subnet-ipv4 when no existing VPC is supplied")
-			}
-
-			if _, _, err := net.ParseCIDR(d.VPCSubnetIPv4); err != nil {
-				return fmt.Errorf("linode VPC subnet IPv4 must be a valid CIDR: %w", err)
-			}
+		if d.VPCSubnetID == 0 {
+			return fmt.Errorf("linode interface networking requires --linode-vpc-subnet-id")
 		}
 
 		if d.VPCPrivateIP != "" {
@@ -408,16 +355,9 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 			if parsed == nil || parsed.To4() == nil {
 				return fmt.Errorf("linode VPC private IP must be a valid IPv4 address")
 			}
-
-			if !usingExisting {
-				_, cidr, _ := net.ParseCIDR(d.VPCSubnetIPv4)
-				if cidr != nil && !cidr.Contains(parsed) {
-					return fmt.Errorf("linode VPC private IP must be within subnet %s", d.VPCSubnetIPv4)
-				}
-			}
 		}
 	} else {
-		if d.VPCID != 0 || d.VPCSubnetID != 0 || d.VPCPrivateIP != "" || d.VPCLabel != "" || d.VPCSubnetLabel != "" || d.VPCSubnetIPv4 != "" {
+		if d.VPCSubnetID != 0 || d.VPCPrivateIP != "" {
 			return fmt.Errorf("VPC interface options require --linode-use-interfaces to be set")
 		}
 	}
@@ -482,12 +422,6 @@ func (d *Driver) PreCreateCheck() error {
 		d.StackScriptLabel = script.Label
 	}
 
-	if d.UseInterfaces && d.VPCID != 0 && d.VPCSubnetID != 0 {
-		if _, err := client.GetVPCSubnet(context.TODO(), d.VPCID, d.VPCSubnetID); err != nil {
-			return fmt.Errorf("failed to confirm subnet %d in VPC %d: %w", d.VPCSubnetID, d.VPCID, err)
-		}
-	}
-
 	return nil
 }
 
@@ -500,11 +434,7 @@ func (d *Driver) Create() error {
 	}
 
 	if d.UseInterfaces {
-		if d.VPCID != 0 && d.VPCSubnetID != 0 {
-			log.Infof("Using interface/VPC networking (VPC %d, subnet %d)", d.VPCID, d.VPCSubnetID)
-		} else {
-			log.Infof("Using interface/VPC networking (creating VPC %q with subnet %q)", d.VPCLabel, d.VPCSubnetLabel)
-		}
+		log.Infof("Using interface/VPC networking (subnet %d)", d.VPCSubnetID)
 	}
 
 	publicKey, err := d.createSSHKey()
@@ -514,33 +444,6 @@ func (d *Driver) Create() error {
 
 	client := d.getClient()
 	boolBooted := !d.CreatePrivateIP
-
-	if d.UseInterfaces && d.VPCSubnetID == 0 {
-		log.Infof("Creating VPC %q with subnet %q (%s) in region %s", d.VPCLabel, d.VPCSubnetLabel, d.VPCSubnetIPv4, d.Region)
-
-		vpc, err := client.CreateVPC(context.TODO(), linodego.VPCCreateOptions{
-			Label:  d.VPCLabel,
-			Region: d.Region,
-			Subnets: []linodego.VPCSubnetCreateOptions{
-				{
-					Label: d.VPCSubnetLabel,
-					IPv4:  d.VPCSubnetIPv4,
-				},
-			},
-		})
-		if err != nil {
-			return fmt.Errorf("failed to create VPC: %w", err)
-		}
-
-		if len(vpc.Subnets) == 0 {
-			return fmt.Errorf("created VPC %d returned no subnets", vpc.ID)
-		}
-
-		d.VPCID = vpc.ID
-		d.VPCSubnetID = vpc.Subnets[0].ID
-
-		log.Infof("Created VPC %d with subnet %d", d.VPCID, d.VPCSubnetID)
-	}
 
 	// Create a linode
 	createOpts := linodego.InstanceCreateOptions{
@@ -637,7 +540,7 @@ func (d *Driver) Create() error {
 		}
 
 		if d.PrivateIPAddress == "" {
-			return fmt.Errorf("Linode VPC private IP address not found for VPC %d subnet %d", d.VPCID, d.VPCSubnetID)
+			return fmt.Errorf("Linode VPC private IP address not found for subnet %d", d.VPCSubnetID)
 		}
 	} else {
 		for _, address := range linode.IPv4 {
