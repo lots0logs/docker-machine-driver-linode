@@ -360,7 +360,7 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	d.InstanceLabel = newLabel
 
 	if d.PublicInterfaceFirewallID < 0 {
-		return fmt.Errorf("linode public interface firewall id must be zero or positive")
+		return fmt.Errorf("invalid value for --linode-public-interface-firewall-id: must be zero or positive")
 	}
 
 	if d.UseInterfaces && d.CreatePrivateIP {
