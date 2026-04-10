@@ -10,6 +10,7 @@ import (
 
 	"github.com/docker/machine/libmachine/drivers"
 	"github.com/google/go-cmp/cmp"
+	"github.com/linode/linodego"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -91,6 +92,132 @@ func TestSetConfigFromFlagsUserDataEmptyPath(t *testing.T) {
 	assert.Contains(t, err.Error(), "--linode-user-data")
 }
 
+func TestSetConfigFromFlagsInterfaceRequiresVPC(t *testing.T) {
+	driver := NewDriver("", "")
+
+	checkFlags := &drivers.CheckDriverOptions{
+		FlagsValues: map[string]interface{}{
+			"linode-token":          "PROJECT",
+			"linode-use-interfaces": true,
+		},
+		CreateFlags: driver.GetCreateFlags(),
+	}
+
+	err := driver.SetConfigFromFlags(checkFlags)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "requires --linode-vpc-subnet-id")
+}
+
+func TestSetConfigFromFlagsInterfaceConflictsWithLegacyPrivateIP(t *testing.T) {
+	driver := NewDriver("", "")
+
+	checkFlags := &drivers.CheckDriverOptions{
+		FlagsValues: map[string]interface{}{
+			"linode-token":             "PROJECT",
+			"linode-use-interfaces":    true,
+			"linode-vpc-subnet-id":     456,
+			"linode-create-private-ip": true,
+		},
+		CreateFlags: driver.GetCreateFlags(),
+	}
+
+	err := driver.SetConfigFromFlags(checkFlags)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "linode-use-interfaces")
+}
+
+func TestSetConfigFromFlagsInterfaceHappyPath(t *testing.T) {
+	driver := NewDriver("", "")
+
+	checkFlags := &drivers.CheckDriverOptions{
+		FlagsValues: map[string]interface{}{
+			"linode-token":                        "PROJECT",
+			"linode-use-interfaces":               true,
+			"linode-vpc-subnet-id":                456,
+			"linode-vpc-private-ip":               "10.0.0.10",
+			"linode-vpc-interface-firewall-id":    321,
+			"linode-public-interface-firewall-id": 789,
+		},
+		CreateFlags: driver.GetCreateFlags(),
+	}
+
+	err := driver.SetConfigFromFlags(checkFlags)
+	assert.NoError(t, err)
+	assert.True(t, driver.UseInterfaces)
+	assert.Equal(t, 456, driver.VPCSubnetID)
+	assert.Equal(t, "10.0.0.10", driver.VPCPrivateIP)
+	assert.Equal(t, 321, driver.VPCInterfaceFirewallID)
+	assert.Equal(t, 789, driver.PublicInterfaceFirewallID)
+}
+
+func TestSetConfigFromFlagsInterfaceFirewallRequiresInterfaces(t *testing.T) {
+	driver := NewDriver("", "")
+
+	checkFlags := &drivers.CheckDriverOptions{
+		FlagsValues: map[string]interface{}{
+			"linode-token":                        "PROJECT",
+			"linode-public-interface-firewall-id": 111,
+		},
+		CreateFlags: driver.GetCreateFlags(),
+	}
+
+	err := driver.SetConfigFromFlags(checkFlags)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "linode-use-interfaces")
+}
+
+func TestSetConfigFromFlagsInterfaceFirewallMustBeNonNegative(t *testing.T) {
+	driver := NewDriver("", "")
+
+	checkFlags := &drivers.CheckDriverOptions{
+		FlagsValues: map[string]interface{}{
+			"linode-token":                        "PROJECT",
+			"linode-use-interfaces":               true,
+			"linode-vpc-subnet-id":                456,
+			"linode-public-interface-firewall-id": -2,
+		},
+		CreateFlags: driver.GetCreateFlags(),
+	}
+
+	err := driver.SetConfigFromFlags(checkFlags)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "--linode-public-interface-firewall-id")
+}
+
+func TestSetConfigFromFlagsVPCInterfaceFirewallRequiresInterfaces(t *testing.T) {
+	driver := NewDriver("", "")
+
+	checkFlags := &drivers.CheckDriverOptions{
+		FlagsValues: map[string]interface{}{
+			"linode-token":                     "PROJECT",
+			"linode-vpc-interface-firewall-id": 222,
+		},
+		CreateFlags: driver.GetCreateFlags(),
+	}
+
+	err := driver.SetConfigFromFlags(checkFlags)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "linode-use-interfaces")
+}
+
+func TestSetConfigFromFlagsVPCInterfaceFirewallMustBeNonNegative(t *testing.T) {
+	driver := NewDriver("", "")
+
+	checkFlags := &drivers.CheckDriverOptions{
+		FlagsValues: map[string]interface{}{
+			"linode-token":                     "PROJECT",
+			"linode-use-interfaces":            true,
+			"linode-vpc-subnet-id":             456,
+			"linode-vpc-interface-firewall-id": -2,
+		},
+		CreateFlags: driver.GetCreateFlags(),
+	}
+
+	err := driver.SetConfigFromFlags(checkFlags)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "--linode-vpc-interface-firewall-id")
+}
+
 func TestPrivateIP(t *testing.T) {
 	ip := net.IP{}
 	for _, addr := range [][]byte{
@@ -132,4 +259,16 @@ func TestNormalizeInstanceLabel(t *testing.T) {
 	if !reflect.DeepEqual(result, expectedResult) {
 		t.Fatal(cmp.Diff(result, expectedResult))
 	}
+}
+
+func TestFirstVPCIPv4SkipsRanges(t *testing.T) {
+	ip := "10.0.0.5"
+	ipRange := "10.0.0.0/24"
+
+	got := firstVPCIPv4([]*linodego.VPCIP{
+		{AddressRange: &ipRange},
+		{Address: &ip},
+	})
+
+	assert.Equal(t, ip, got)
 }
